@@ -7,6 +7,7 @@ require "yaml"
 module Asanban
 	class Service < Sinatra::Base
 		set :public_folder, File.expand_path(File.join('..', '..', '..', 'static'), __FILE__)
+		set :port, ENV['PORT'] if ENV['PORT'] #set by Heroku
 
 		if !File.exists?('asana.yml')
 		  puts "Must specify configuration in asana.yml"
