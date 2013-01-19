@@ -1,0 +1,26 @@
+<html>
+	<head>
+		<script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.8.3.min.js"></script>
+		<script src="https://raw.github.com/DmitryBaranovskiy/raphael/master/raphael-min.js"></script>
+		<script src="https://raw.github.com/jcarver989/raphy-charts/master/compiled/charts.min.js"></script>
+		<script type="text/javascript">
+		$(document).ready(function() {
+			var chart = new Charts.LineChart('leadtime_chart');
+			$.get("/metrics?aggregate_by=month", function(metric_data) {
+				chart.add_line({
+			  	data: metric_data,
+			  	options: {
+			    	line_color: "#00aadd",
+			    	x_label_size: 40
+				  }
+				});
+				chart.draw();
+			});
+		});
+		</script>
+	</head>
+	<body>
+		<h1>Lead Times</h1>
+		<div id='leadtime_chart' style='width: 600px; height: 300px;'></div>
+	</body>
+</html>
