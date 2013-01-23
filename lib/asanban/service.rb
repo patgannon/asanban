@@ -49,10 +49,12 @@ module Asanban
 			
 			content_type :json
 			results.find().map do |result|
-				date_str = result['_id']
-				date_str[0,2] = "" if aggregate_by == "month"
-				[date_str.sub("-","").to_i, result["value"]["avg"]]
-			end.sort {|r| r[0]}.to_json
+				[result['_id'], result["value"]["avg"]]
+			end.sort {|a, b| datestring_to_int(a[0]) <=> datestring_to_int(b[0])}.to_json
+		end
+
+		def datestring_to_int(datestring)
+			datestring.split("-").map {|part| part.length == 1 ? "0" + part : part}.join("").to_i
 		end
 	end
 

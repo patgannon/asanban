@@ -5,10 +5,13 @@
 		<script src="https://raw.github.com/jcarver989/raphy-charts/master/compiled/charts.min.js"></script>
 		<script type="text/javascript">
 		$(document).ready(function() {
-			var chart = new Charts.LineChart('leadtime_chart');
+			var chart = new Charts.LineChart('leadtime_chart', { label_format: "%m/%d/%Y" });
 			$.get("/metrics?aggregate_by=month", function(metric_data) {
+				var data = metric_data.map(function(item) {
+					return [parse(item[0]), item[1]];
+				});
 				chart.add_line({
-			  	data: metric_data,
+			  	data: data,
 			  	options: {
 			    	line_color: "#00aadd",
 			    	x_label_size: 40
@@ -16,6 +19,11 @@
 				});
 				chart.draw();
 			});
+
+			function parse(month_str) {
+				var month_parts = month_str.split("-");
+				return new Date(month_parts[0], month_parts[1] - 1, "1");
+			}
 		});
 		</script>
 	</head>
