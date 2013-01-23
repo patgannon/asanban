@@ -1,6 +1,8 @@
 # Asanban
 
-TODO: Add pointer to post on dev.bizo.com
+Tooling for using Asana with a Kanban system.
+
+See: http://dev.bizo.com/2013/01/asanban-lean-development-with-asana-and.html
 
 ## Installation and Usage
 
