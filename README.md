@@ -11,13 +11,13 @@ TODO: Add pointer to post on dev.bizo.com
 4. Provision a production installation of MongoDB.  A free account at mongolab should get you started if needed.
 5. Create a YAML file called asana.yml in the directory you created in step 1.  The file should have the following structure:
 
-mongodb_uri: mongodb://[user]:[password]@[server]:[port]/[db-name]  (Note that this is for the production MongoDB installation)
-mongodb_dbname: [db-name]  (for both environments)
-asana_api_key: [your Asana API key - available in the Asana UI]
-asana_workspace_id: [your Asana workspace ID]
-asana_project_id: [the ID of the Asana project for which you would like to track metrics]
-asana_beginning_milestone: [the name of the first stage in your Kanban system, eg. Dev Ready]
-asana_ending_milestone: [the name of the last stage in your Kanban system, eg. Production]
+- mongodb_uri: mongodb://[user]:[password]@[server]:[port]/[db-name]  (Note that this is for the production MongoDB installation)
+- mongodb_dbname: [db-name]  (for both environments)
+- asana_api_key: [your Asana API key - available in the Asana UI]
+- asana_workspace_id: [your Asana workspace ID]
+- asana_project_id: [the ID of the Asana project for which you would like to track metrics]
+- asana_beginning_milestone: [the name of the first stage in your Kanban system, eg. Dev Ready]
+- asana_ending_milestone: [the name of the last stage in your Kanban system, eg. Production]
 
 6. Run: "asana-load local" (the bulk loader).  This will create task, milestone and lead time data in your local MongoDB, in the DB with the name given in the configuration file specified above.
 
