@@ -27,7 +27,7 @@ See: http://dev.bizo.com/2013/01/asanban-lean-development-with-asana-and.html
 9. You can hit http://localhost:4567/metrics?aggregate_by=month to see your data in JSON format.  (You can also pass in "year" or "day" instead of "month".)  There is also a very rough prototype of a page with a raphy-charts graph showing the data from the web service that you can hit by visiting http://localhost:4567/metrics.html .  This is just an example of how to consume the data; it needs a lot of work.
 10. Since the web service is implemented with Sinatra, you will want to create a create a rack-up file if you're going to deploy it to production (or Heroku).  Do that by creating a file called config.ru in the directory you created in step 1, which contains the following:
 
-load Gem.bin_path('asanban', 'asanban-service', '0.0.3')
+- load Gem.bin_path('asanban', 'asanban-service', '0.0.3')
 
 11. Schedule the bulk loader in cron to run every night.
 
