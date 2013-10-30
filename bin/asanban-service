@@ -1,3 +1,6 @@
 #!/usr/bin/env ruby
 #
-require 'asanban/service.rb'
+require 'asanban/service'
+
+puts "Running asanban web service"
+Asanban::Service.run!

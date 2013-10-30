@@ -9,13 +9,16 @@ module Asanban
 		set :public_folder, File.expand_path(File.join('..', '..', '..', 'static'), __FILE__)
 		set :port, ENV['PORT'] if ENV['PORT'] #set by Heroku
 
-		if !File.exists?('asana.yml')
-		  puts "Must specify configuration in asana.yml"
-		  exit(1)
+		configure :production, :development do
+			if !File.exists?('asana.yml')
+				puts "Must specify configuration in asana.yml"
+				exit(1)
+			end
+			set :config, YAML::load(File.open('asana.yml'))
 		end
-		config = YAML::load(File.open('asana.yml'))
 
 		get '/metrics' do
+		  config = settings.config
 		  conn = Mongo::Connection.from_uri(config['mongodb_uri'])
 		  db = conn.db(config["mongodb_dbname"])
 			aggregate_by = params[:aggregate_by]
@@ -57,7 +60,4 @@ module Asanban
 			datestring.split("-").map {|part| part.length == 1 ? "0" + part : part}.join("").to_i
 		end
 	end
-
-	puts "Running asanban web service"
-	Service.run!
 end
