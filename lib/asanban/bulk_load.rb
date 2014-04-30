@@ -35,7 +35,7 @@ module Asanban
           puts "Invalid stage: #{ARGV[0]}"
           exit(1)
         end
-        if mode = ARGV[1] && !['tasks', 'times'].include?(mode)
+        if (mode = ARGV[1]) && !['tasks', 'times'].include?(mode)
           puts "Invalid mode: #{mode}"
           exit(1)
         end
@@ -61,6 +61,7 @@ module Asanban
           puts "Server returned an error retrieving tasks: #{tasks['errors'][0]['message']}"
         else
           #old_tasks = tasks_collection.find({"projects.id" => project_id, "completed" => false}).to_a
+          tasks_collection.update({}, {"$set" => {"old" => true}}, {:multi => true})
           tasks['data'].each_with_index do |task, i|
             uri = URI.parse("https://app.asana.com/api/1.0/tasks/#{task['id']}/stories")
             req = Net::HTTP::Get.new(uri.path, header)
@@ -74,6 +75,7 @@ module Asanban
              task["stories"] = stories['data']
             end
 
+            task["old"] = false
             tasks_collection.update({"id" => task['id']}, task, {:upsert => true})
             puts "Created task: #{task['id']}"
 
@@ -93,10 +95,13 @@ module Asanban
         lead_times_collection = db["lead_times"]
         # TODO: filter - complete_time = null or completed_time - now <= 24hours
         tasks_collection.find().each do |task|
-          stories = task["stories"]
+          stories = task["stories"] || []
           task_id = task["_id"]
+          #TODO: Write a test...
+          task_completed = task["completed"]
+          task_deleted = task["old"]
           stories.each do |story|
-            if (story['text'] =~ /Moved from (.*)\(\d+\) to (.*)\(\d+\)/)    
+            if (story['text'] =~ /Moved from (.*)\(\d+\) to (.*)\(\d+\)/)
               start_milestone = $1.strip
               end_milestone = $2.strip
               timestamp = Time.parse(story["created_at"])
@@ -104,15 +109,18 @@ module Asanban
               month = "#{timestamp.year}-#{timestamp.month}"
               year = timestamp.year.to_s
               end_story_id = story["id"]
+              escaped_milestone = start_milestone.gsub('(', '\\(').gsub(')', '\\)')
 
-              if (start_story = stories.find {|s| s['text'] =~ /Moved .*to #{start_milestone}/})
+              if (start_story = stories.find {|s| s['text'] =~ /Moved .*to #{escaped_milestone}/})
                 #TODO: Refactor to use record_time
                 start_story_id = start_story["id"]
                 start_timestamp = Time.parse(start_story["created_at"])
                 elapsed_time_seconds = timestamp - start_timestamp
                 elapsed_days = elapsed_time_seconds / (60.0 * 60.0 * 24.0)
 
-                milestone = {"day" => day, "month" => month, "year" => year, "task_id" => task_id, 
+                milestone = {"day" => day, "month" => month, "year" => year, 
+                  "task_id" => task_id, "date" => Time.parse(day),
+                  "task_completed" => task_completed, "task_deleted" => task_deleted,
                   "start_milestone" => start_milestone, "end_milestone" => end_milestone, 
                   "start_story_id" => start_story_id, "end_story_id" => end_story_id,
                   "elapsed_days" => elapsed_days}
@@ -128,7 +136,7 @@ module Asanban
           if ((end_story = stories.find_all {|s| s['text'] =~ /Moved .*to #{config['asana_ending_milestone']}/}[-1]) && 
               (start_story = stories.find_all {|s| s['text'] =~ /Moved .*to #{config['asana_beginning_milestone']}/}[0]))
             lead_times_collection.remove("end_story_id" => end_story["id"])
-            lead_time = record_time(task_id, start_story, config['asana_beginning_milestone'], end_story, config['asana_ending_milestone'], lead_times_collection)
+            lead_time = record_time(task_id, task_completed, task_deleted, start_story, config['asana_beginning_milestone'], end_story, config['asana_ending_milestone'], lead_times_collection)
             puts "Inserted lead time: #{lead_time}"
           end
         end
@@ -138,7 +146,7 @@ module Asanban
     end
 
     #Visible For Testing
-    def self.record_time(task_id, start_story, start_milestone, end_story, end_milestone, collection)
+    def self.record_time(task_id, task_completed, task_deleted, start_story, start_milestone, end_story, end_milestone, collection)
       end_story_id = end_story["id"]
       start_story_id = start_story["id"]
       start_timestamp = Time.parse(start_story["created_at"])
@@ -149,7 +157,9 @@ module Asanban
       month = "#{end_timestamp.year}-#{end_timestamp.month}"
       year = end_timestamp.year.to_s
 
-      record = {"day" => day, "month" => month, "year" => year, "task_id" => task_id, 
+      record = {"day" => day, "month" => month, "year" => year, 
+        "task_id" => task_id, "date" => Time.parse(day),
+        "task_completed" => task_completed, "task_deleted" => task_deleted,
         "start_milestone" => start_milestone, "end_milestone" => end_milestone, 
         "start_story_id" => start_story_id, "end_story_id" => end_story_id,
         "elapsed_days" => elapsed_days}

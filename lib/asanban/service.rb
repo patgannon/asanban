@@ -3,6 +3,7 @@ require "json"
 require "mongo"
 require "sinatra"
 require "yaml"
+require "descriptive_statistics"
 
 module Asanban
   class Service < Sinatra::Base
@@ -22,7 +23,8 @@ module Asanban
       conn = Mongo::Connection.from_uri(config['mongodb_uri'])
       db = conn.db(config["mongodb_dbname"])
       aggregate_by = params[:aggregate_by]
-      return [400, "Cannot aggregate by #{aggregate_by}"] unless ["year", "month", "day"].include? aggregate_by
+      return [400, "Cannot aggregate by #{aggregate_by}"] unless ["year", "month", "day", "start_milestone"].include? aggregate_by
+      content_type :json
 
       map_function = "function() { emit(this.#{aggregate_by}, { count: 1, elapsed_days: this.elapsed_days }); };"
 
@@ -41,6 +43,72 @@ module Asanban
       };"
 
       map_reduce_options = {:finalize => finalize_function, :out => "mr_results"}
+
+      if (aggregate_by == "start_milestone")
+        results = db["milestone_times"].map_reduce(map_function, reduce_function, map_reduce_options)
+        hashes = results.find().map do |result|
+          {result['_id'] => 
+            {"count" => result["value"]["count"], 
+              "cycle_time" => result["value"]["avg"]}}
+        end
+        #TODO: Refactor
+        hash = {}
+        hashes.map do |h|
+          hash.merge! h
+        end
+
+        #TODO: Move this (and other M/Rs?) to bulk loader
+        map_function = "function() { emit(this.task_id, {end_milestone: this.end_milestone, end_story_id: this.end_story_id, day: this.day}); };"
+        reduce_function = "function (name, values){
+          var n = {end_milestone : '', end_story_id : 0};
+          for ( var i=0; i<values.length; i++ ){
+            if (values[i].end_story_id > n.end_story_id) {
+              n.end_milestone = values[i].end_milestone;
+              n.end_story_id = values[i].end_story_id;
+              n.day = values[i].day;
+            }
+          }
+          return n;
+        };"
+
+        query = {"task_completed" => false, "task_deleted" => false}
+        if ((start_date = params[:start_date]) && (end_date = params[:end_date]))
+          query["date"] = {"$gte" => Time.parse(start_date), "$lte" => Time.parse(end_date)}
+        end
+        results = db["milestone_times"].map_reduce(map_function, reduce_function, :query => query, :out => "mr_end_milestone")
+        elapsed_days_by_phase = {}
+        results.find().map do |result|
+          task_id = result['_id']
+          end_milestone = result["value"]["end_milestone"]
+          if (end_milestone == "Dev Ready (10): Strat(5), Eng (1), Imp(3), Eme")
+            puts "task_id: #{task_id}"
+          end
+          day = result["value"]["day"]
+          milestone_metrics = (hash[end_milestone] ||= {})
+          milestone_metrics["current"] ||= 0
+          milestone_metrics["current"] += 1
+          elapsed_seconds = Time.now - Time.parse(day)
+          elapsed_days = ((elapsed_seconds / 60) / 60) / 24
+          milestone_metrics["current_days_total"] ||= 0
+          milestone_metrics["current_days_total"] += elapsed_days
+          elapsed_days_by_phase[end_milestone] ||= []
+          elapsed_days_by_phase[end_milestone].push elapsed_days
+        end
+
+        hash.each do |key, value|
+          if (value["current_days_total"] && value["current"])
+            value["current_days_average"] = value["current_days_total"] / value["current"]
+            all_elapsed_days = elapsed_days_by_phase[key]
+            value["current_days_stdev"] = all_elapsed_days.standard_deviation
+          end
+        end
+
+        if (params[:current_milestones_only])
+          hash = hash.select {|phase, phase_metrics| phase_metrics["current_days_average"] }
+        end
+        return hash.to_json
+      end
+
       if (milestone = params[:milestone])
         map_reduce_options[:query] = {"start_milestone" => milestone}
         collection = db["milestone_times"]
@@ -50,7 +118,6 @@ module Asanban
 
       results = collection.map_reduce(map_function, reduce_function, map_reduce_options)
       
-      content_type :json
       results.find().map do |result|
         [result['_id'], result["value"]["avg"]]
       end.sort {|a, b| datestring_to_int(a[0]) <=> datestring_to_int(b[0])}.to_json

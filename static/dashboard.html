@@ -1,0 +1,44 @@
+<html ng-app="asanbanApp">
+	<head>
+		<link href="https://public.bizo.com/bizstrap/css/bizstrap-v2.2.2.15.css" rel="stylesheet" />
+		<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.0-beta.6/angular.min.js"></script>
+		<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.0-beta.6/angular-resource.min.js"></script>
+		<script src="js/controllers.js"></script>
+	</head>
+	<body ng-controller="AsanbanDashboardCtrl">
+		<h1 class="section-header">Kanban Dashboard</h1>
+		<div class="control-group">
+			<label class="control-label">Analysis Begin Date</label>
+			<div class="controls">
+				<input type="text" class="input-xlarge" ng-model="start_date" />
+			</div>
+		</div>
+		<div class="control-group">
+			<label class="control-label">Analysis End Date</label>
+			<div class="controls">
+				<input type="text" class="input-xlarge" ng-model="end_date" />
+			</div>
+		</div>
+		<button class="btn btn-large" ng-click="query()">Filter</button>
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Phase</th>
+					<th>Total # of Items</th>
+					<th>Average # of Days in State</th>
+					<th>Std Deviation of Days in State</th>
+					<th># of Items that Flowed Through in Date Range</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr ng-repeat="(phase, phase_metrics) in metrics">
+					<td>{{phase}}</td>
+					<td>{{phase_metrics.current | number}}</td>
+					<td>{{phase_metrics.current_days_average | number:0}}</td>
+					<td>{{phase_metrics.current_days_stdev | number:1}}</td>
+					<td>{{phase_metrics.count | number}}</td>
+				</tr>
+			</tbody>
+		</table>
+	</body>
+</html>

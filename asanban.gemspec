@@ -20,6 +20,7 @@ Gem::Specification.new do |gem|
   gem.add_dependency "json"
   gem.add_dependency "json_pure"
   gem.add_dependency "sinatra"
+  gem.add_dependency "descriptive_statistics"
   gem.add_development_dependency "rspec"
   gem.add_development_dependency "rack-test"
 end
