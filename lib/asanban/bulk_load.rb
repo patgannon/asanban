@@ -15,6 +15,10 @@ module Asanban
         end
         config = YAML::load(File.open('asana.yml'))
       end
+      # Set Mongo Logger level and output to file
+      Mongo::Logger.logger       = ::Logger.new('mongo.log')
+      Mongo::Logger.logger.level = ::Logger::INFO
+
       api_key = config['asana_api_key']
       workspace_id = config['asana_workspace_id']
       project_id = config['asana_project_id']

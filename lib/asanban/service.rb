@@ -17,6 +17,9 @@ module Asanban
       end
       set :config, YAML::load(File.open('asana.yml'))
     end
+    # Set Mongo Logger level and output to file
+    Mongo::Logger.logger       = ::Logger.new('mongo.log')
+    Mongo::Logger.logger.level = ::Logger::INFO
 
     get '/metrics' do
       config = settings.config
