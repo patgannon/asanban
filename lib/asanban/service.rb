@@ -23,8 +23,9 @@ module Asanban
 
     get '/metrics' do
       config = settings.config
-      conn = Mongo::Connection.from_uri(config['mongodb_uri'])
-      db = conn.db(config["mongodb_dbname"])
+      mongodb_uri = config['mongodb_uri']
+      mongodb_dbname = config['mongodb_dbname']
+      mongoClient = Mongo::Client.new(mongodb_uri, :database => mongodb_dbname)
       aggregate_by = params[:aggregate_by]
       return [400, "Cannot aggregate by #{aggregate_by}"] unless ["year", "month", "day", "start_milestone"].include? aggregate_by
       content_type :json
@@ -45,11 +46,11 @@ module Asanban
         return res;
       };"
 
-      map_reduce_options = {:finalize => finalize_function, :out => "mr_results"}
+      map_reduce_options = {:finalize => finalize_function, :out => "mr_start_milestone"}
 
       if (aggregate_by == "start_milestone")
-        results = db["milestone_times"].map_reduce(map_function, reduce_function, map_reduce_options)
-        hashes = results.find().map do |result|
+        mongoClient["milestone_times"].find().map_reduce(map_function, reduce_function, map_reduce_options)
+        hashes = mongoClient[:mr_start_milestone].find().each do |result|
           {result['_id'] => 
             {"count" => result["value"]["count"], 
               "cycle_time" => result["value"]["avg"]}}
@@ -78,9 +79,9 @@ module Asanban
         if ((start_date = params[:start_date]) && (end_date = params[:end_date]))
           query["date"] = {"$gte" => Time.parse(start_date), "$lte" => Time.parse(end_date)}
         end
-        results = db["milestone_times"].map_reduce(map_function, reduce_function, :query => query, :out => "mr_end_milestone")
+        results = mongoClient["milestone_times"].find().map_reduce(map_function, reduce_function, {:query => query, :out => "mr_end_milestone"})
         elapsed_days_by_phase = {}
-        results.find().map do |result|
+        mongoClient[:mr_end_milestone].find().each do |result|
           task_id = result['_id']
           end_milestone = result["value"]["end_milestone"]
           if (end_milestone == "Dev Ready (10): Strat(5), Eng (1), Imp(3), Eme")
@@ -114,14 +115,12 @@ module Asanban
 
       if (milestone = params[:milestone])
         map_reduce_options[:query] = {"start_milestone" => milestone}
-        collection = db["milestone_times"]
+        map_reduce_options[:out] = "mr_milestone"
+        results = mongoClient["milestone_times"].find().map_reduce(map_function, reduce_function, map_reduce_options)
       else
-        collection = db["lead_times"]
+        results = mongoClient["lead_times"].find().map_reduce(map_function, reduce_function, {out: "mr_milestone" })
       end
-
-      results = collection.map_reduce(map_function, reduce_function, map_reduce_options)
-      
-      results.find().map do |result|
+      mongoClient[:mr_milestone].find().each do |result|
         [result['_id'], result["value"]["avg"]]
       end.sort {|a, b| datestring_to_int(a[0]) <=> datestring_to_int(b[0])}.to_json
     end

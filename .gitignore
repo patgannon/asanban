@@ -2,6 +2,7 @@
 *.rbc
 *.yml
 *.log
+*.project
 .bundle
 .config
 .yardoc

@@ -32,9 +32,9 @@ module Asanban
         exit(1)
       else
         if (ARGV[0].downcase == "local")
-          conn = Mongo::Connection.new
+          mongoClient = Mongo::Client.new(['localhost:27017'], :database => mongodb_dbname)
         elsif (ARGV[0].downcase == "prod")
-          conn = Mongo::Connection.from_uri(mongodb_uri)
+          mongoClient = Mongo::Client.new(mongodb_uri, :database => mongodb_dbname)
         else
           puts "Invalid stage: #{ARGV[0]}"
           exit(1)
@@ -45,11 +45,10 @@ module Asanban
         end
       end
 
-      db = conn.db(mongodb_dbname)
-      tasks_collection = db["tasks"]
+      tasks_collection = mongoClient[:tasks]
 
       if (mode == 'tasks' || !mode)
-        puts "Creating times..."
+        puts "Creating/Updating tasks..."
         uri = URI.parse("https://app.asana.com/api/1.0/projects/#{project_id}/tasks?opt_fields=id,name,assignee,assignee_status,created_at,completed,completed_at,due_on,followers,modified_at,name,notes,projects,parent")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
@@ -65,7 +64,7 @@ module Asanban
           puts "Server returned an error retrieving tasks: #{tasks['errors'][0]['message']}"
         else
           #old_tasks = tasks_collection.find({"projects.id" => project_id, "completed" => false}).to_a
-          tasks_collection.update({}, {"$set" => {"old" => true}}, {:multi => true})
+          tasks_collection.find().update_many("$set" => {:old => true})
           tasks['data'].each_with_index do |task, i|
             uri = URI.parse("https://app.asana.com/api/1.0/tasks/#{task['id']}/stories")
             req = Net::HTTP::Get.new(uri.path, header)
@@ -80,8 +79,8 @@ module Asanban
             end
 
             task["old"] = false
-            tasks_collection.update({"id" => task['id']}, task, {:upsert => true})
-            puts "Created task: #{task['id']}"
+            tasks_collection.find(:id => task['id']).update_one(task, {:upsert => true})
+            puts "Created task: #{task['id']} for #{task['name']}"
 
             if (((i + 1) % 100) == 0)
               puts "Sleeping for one minute to avoid Asana's rate limit of 100 requests per minute"
@@ -89,14 +88,14 @@ module Asanban
             end
           end
 
-          puts "Done creating times."
+          puts "Done creating/updating tasks."
         end
       end
 
       if (mode == 'times' || !mode)
         puts "Creating milestone and lead time data..."
-        milestone_times_collection = db["milestone_times"]
-        lead_times_collection = db["lead_times"]
+        milestone_times_collection = mongoClient[:milestone_times]
+        lead_times_collection = mongoClient[:lead_times]
         # TODO: filter - complete_time = null or completed_time - now <= 24hours
         tasks_collection.find().each do |task|
           stories = task["stories"] || []
@@ -128,8 +127,8 @@ module Asanban
                   "start_milestone" => start_milestone, "end_milestone" => end_milestone, 
                   "start_story_id" => start_story_id, "end_story_id" => end_story_id,
                   "elapsed_days" => elapsed_days}
-                milestone_times_collection.remove("end_story_id" => end_story_id)
-                milestone_times_collection.insert(milestone)
+                milestone_times_collection.find(:end_story_id => end_story_id).delete_one
+                milestone_times_collection.insert_one(milestone)
                 puts "Inserted milestone: #{milestone}"
               else
                 puts "Could not find time task entered #{start_milestone}"
@@ -139,7 +138,7 @@ module Asanban
 
           if ((end_story = stories.find_all {|s| s['text'] =~ /Moved .*to #{config['asana_ending_milestone']}/}[-1]) && 
               (start_story = stories.find_all {|s| s['text'] =~ /Moved .*to #{config['asana_beginning_milestone']}/}[0]))
-            lead_times_collection.remove("end_story_id" => end_story["id"])
+            lead_times_collection.find(:end_story_id => end_story["id"]).delete_one
             lead_time = record_time(task_id, task_completed, task_deleted, start_story, config['asana_beginning_milestone'], end_story, config['asana_ending_milestone'], lead_times_collection)
             puts "Inserted lead time: #{lead_time}"
           end
@@ -167,8 +166,8 @@ module Asanban
         "start_milestone" => start_milestone, "end_milestone" => end_milestone, 
         "start_story_id" => start_story_id, "end_story_id" => end_story_id,
         "elapsed_days" => elapsed_days}
-      collection.remove("end_story_id" => end_story_id)
-      collection.insert(record)
+      collection.find(:end_story_id => end_story_id).delete_one
+      collection.insert_one(record)
       record
     end
   end
