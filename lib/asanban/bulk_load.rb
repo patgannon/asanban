@@ -65,6 +65,7 @@ module Asanban
         else
           #old_tasks = tasks_collection.find({"projects.id" => project_id, "completed" => false}).to_a
           tasks_collection.find().update_many("$set" => {:old => true})
+          startTime = Time.now
           tasks['data'].each_with_index do |task, i|
             uri = URI.parse("https://app.asana.com/api/1.0/tasks/#{task['id']}/stories")
             req = Net::HTTP::Get.new(uri.path, header)
@@ -83,8 +84,13 @@ module Asanban
             puts "Created task: #{task['id']} for #{task['name']}"
 
             if (((i + 1) % 100) == 0)
-              puts "Sleeping for one minute to avoid Asana's rate limit of 100 requests per minute"
-              sleep 60
+              if (timeElapsed = (Time.now - startTime) < 60)
+                puts "Sleeping for one minute to avoid Asana's rate limit of 100 requests per minute"
+                sleep (60 - timeElapsed)
+              else
+                puts "Reached 100 requests, but took more than 1 minute, thus we can safely continue"
+              end
+              startTime = Time.now
             end
           end
 
