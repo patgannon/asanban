@@ -55,13 +55,13 @@ module Asanban
         return res;
       };"
 
-      map_reduce_options = {:finalize => finalize_function, :out => "mr_start_milestone"}
+      map_reduce_options = {:finalize => finalize_function, :out => {inline: 1}}
 
       if (aggregate_by == "start_milestone")
-        mongoClient["milestone_times"].find().map_reduce(map_function, reduce_function, map_reduce_options)
-        hashes = mongoClient[:mr_start_milestone].find().each do |result|
           {result['_id'] => 
             {"count" => result["value"]["count"], 
+        result = mongoClient[:milestone_times].find().map_reduce(map_function, reduce_function, map_reduce_options)
+        hashes = result.each do |result|
               "cycle_time" => result["value"]["avg"]}}
         end
         #TODO: Refactor
@@ -88,15 +88,15 @@ module Asanban
         if ((start_date = params[:start_date]) && (end_date = params[:end_date]))
           query["date"] = {"$gte" => Time.parse(start_date), "$lte" => Time.parse(end_date)}
         end
-        results = mongoClient["milestone_times"].find().map_reduce(map_function, reduce_function, {:query => query, :out => "mr_end_milestone"})
+        results = mongoClient[:milestone_times].find(query).map_reduce(map_function, reduce_function, {:out => {inline: 1}})
         elapsed_days_by_phase = {}
-        mongoClient[:mr_end_milestone].find().each do |result|
           task_id = result['_id']
           end_milestone = result["value"]["end_milestone"]
           if (end_milestone == "Dev Ready (10): Strat(5), Eng (1), Imp(3), Eme")
             puts "task_id: #{task_id}"
           end
           day = result["value"]["day"]
+        results.each do |result|
           milestone_metrics = (hash[end_milestone] ||= {})
           milestone_metrics["current"] ||= 0
           milestone_metrics["current"] += 1
@@ -123,15 +123,14 @@ module Asanban
       end
 
       if (milestone = params[:milestone])
-        map_reduce_options[:query] = {"start_milestone" => milestone}
-        map_reduce_options[:out] = "mr_milestone"
-        results = mongoClient["milestone_times"].find().map_reduce(map_function, reduce_function, map_reduce_options)
+        results = mongoClient[:milestone_times].find(:start_milestone => milestone).map_reduce(map_function, reduce_function, {:out => {inline: 1}})
       else
-        results = mongoClient["lead_times"].find().map_reduce(map_function, reduce_function, {out: "mr_milestone" })
+        results = mongoClient[:lead_times].find().map_reduce(map_function, reduce_function, {:finalize => finalize_function, :out => {inline: 1}})
       end
-      mongoClient[:mr_milestone].find().each do |result|
-        [result['_id'], result["value"]["avg"]]
-      end.sort {|a, b| datestring_to_int(a[0]) <=> datestring_to_int(b[0])}.to_json
+      sortedresults = results.sort do |a, b|
+        datestring_to_int(a[:_id]) <=> datestring_to_int(b[:_id])
+      end
+      sortedresults.to_json
     end
 
     def datestring_to_int(datestring)
