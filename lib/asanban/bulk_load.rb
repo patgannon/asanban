@@ -110,7 +110,9 @@ module Asanban
           task_completed = task["completed"]
           task_deleted = task["old"]
           stories.each do |story|
-            if (story['text'] =~ /Moved from (.*)\(\d+\) to (.*)\(\d+\)/)
+            # Matches story text to: moved from $1:section to $2:section ($3:project)
+            # This effectively finds when tasks are moved between sections
+            if (story[:text] =~ /moved from (.*) \(.+\) to (.*) \(.+\) \((.*)\)/)
               start_milestone = $1.strip
               end_milestone = $2.strip
               timestamp = Time.parse(story["created_at"])
@@ -118,9 +120,10 @@ module Asanban
               month = "#{timestamp.year}-#{timestamp.month}"
               year = timestamp.year.to_s
               end_story_id = story["id"]
-              escaped_milestone = start_milestone.gsub('(', '\\(').gsub(')', '\\)')
-
-              if (start_story = stories.find {|s| s['text'] =~ /Moved .*to #{escaped_milestone}/})
+              # Matches story text to: moved into start_milestone, or moved from .. to start_milestone
+              # This effectively finds when tasks have started in the starting section of the movement in the 'if' above
+              # This is used to measure the time the story has spend in the starting section
+              if (start_story = stories.find {|s| s['text'] =~ /moved .*to #{start_milestone}/})
                 #TODO: Refactor to use record_time
                 start_story_id = start_story["id"]
                 start_timestamp = Time.parse(start_story["created_at"])
@@ -142,8 +145,9 @@ module Asanban
             end
           end
 
-          if ((end_story = stories.find_all {|s| s['text'] =~ /Moved .*to #{config['asana_ending_milestone']}/}[-1]) && 
-              (start_story = stories.find_all {|s| s['text'] =~ /Moved .*to #{config['asana_beginning_milestone']}/}[0]))
+          # In all stories of this task, find the begin and end story matching with the milestones in the configuration
+          if ((end_story = stories.find_all {|s| s['text'] =~ /moved .*to #{config['asana_ending_milestone']}/}[-1]) &&
+              (start_story = stories.find_all {|s| s['text'] =~ /moved .*to #{config['asana_beginning_milestone']}/}[0]))
             lead_times_collection.find(:end_story_id => end_story["id"]).delete_one
             lead_time = record_time(task_id, task_completed, task_deleted, start_story, config['asana_beginning_milestone'], end_story, config['asana_ending_milestone'], lead_times_collection)
             puts "Inserted lead time: #{lead_time}"
