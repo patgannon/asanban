@@ -25,7 +25,16 @@ module Asanban
       config = settings.config
       mongodb_uri = config['mongodb_uri']
       mongodb_dbname = config['mongodb_dbname']
-      mongoClient = Mongo::Client.new(mongodb_uri, :database => mongodb_dbname)
+      if (ARGV.count > 0)
+        if (ARGV[0].downcase == "local")
+          mongoClient = Mongo::Client.new(['localhost:27017'], :database => mongodb_dbname)
+        elsif (ARGV[0].downcase == "prod")
+          mongoClient = Mongo::Client.new(mongodb_uri, :database => mongodb_dbname)
+        else
+          puts "Invalid stage: #{ARGV[0]}"
+          exit(1)
+        end
+      end
       aggregate_by = params[:aggregate_by]
       return [400, "Cannot aggregate by #{aggregate_by}"] unless ["year", "month", "day", "start_milestone"].include? aggregate_by
       content_type :json
