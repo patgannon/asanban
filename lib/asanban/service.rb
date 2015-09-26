@@ -61,10 +61,10 @@ module Asanban
       map_reduce_options = {:finalize => finalize_function, :out => {inline: 1}}
 
       if (aggregate_by == "start_milestone")
-          {result['_id'] => 
-            {"count" => result["value"]["count"], 
         result = mongoClient[:milestone_times].find().map_reduce(map_function, reduce_function, map_reduce_options)
         hashes = result.each do |result|
+          {result['_id'] => 
+              {"count" => result["value"]["count"], 
               "cycle_time" => result["value"]["avg"]}}
         end
         #TODO: Refactor
