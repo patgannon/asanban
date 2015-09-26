@@ -8,7 +8,7 @@
 			var chart = new Charts.LineChart('leadtime_chart', { label_format: "%m/%d/%Y" });
 			$.get("/metrics?aggregate_by=month", function(metric_data) {
 				var data = metric_data.map(function(item) {
-					return [parse(item[0]), item[1]];
+					return [parse(item["_id"]), item["value"]["avg"]];
 				});
 				chart.add_line({
 			  	data: data,
