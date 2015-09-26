@@ -104,11 +104,12 @@ module Asanban
         lead_times_collection = mongoClient[:lead_times]
         # TODO: filter - complete_time = null or completed_time - now <= 24hours
         tasks_collection.find().each do |task|
-          stories = task["stories"] || []
-          task_id = task["_id"]
+          stories = task[:stories] || []
+          task_id = task[:_id]
+          task_name = task[:name]
           #TODO: Write a test...
-          task_completed = task["completed"]
-          task_deleted = task["old"]
+          task_completed = task[:completed]
+          task_deleted = task[:old]
           stories.each do |story|
             # Matches story text to: moved from $1:section to $2:section ($3:project)
             # This effectively finds when tasks are moved between sections
@@ -130,15 +131,15 @@ module Asanban
                 elapsed_time_seconds = timestamp - start_timestamp
                 elapsed_days = elapsed_time_seconds / (60.0 * 60.0 * 24.0)
 
-                milestone = {"day" => day, "month" => month, "year" => year, 
-                  "task_id" => task_id, "date" => Time.parse(day),
+                milestone = {"day" => day, "month" => month, "year" => year,
+                  "task_id" => task_id, "task_name" => task_name, "date" => Time.parse(day),
                   "task_completed" => task_completed, "task_deleted" => task_deleted,
-                  "start_milestone" => start_milestone, "end_milestone" => end_milestone, 
+                  "start_milestone" => start_milestone, "end_milestone" => end_milestone,
                   "start_story_id" => start_story_id, "end_story_id" => end_story_id,
                   "elapsed_days" => elapsed_days}
                 milestone_times_collection.find(:end_story_id => end_story_id).delete_one
                 milestone_times_collection.insert_one(milestone)
-                puts "Inserted milestone: #{milestone}"
+                puts "Inserted milestone for task: #{task["name"]}, #{start_milestone} --> #{end_milestone}."
               else
                 puts "Could not find time task entered #{start_milestone}"
               end
@@ -150,7 +151,7 @@ module Asanban
               (start_story = stories.find_all {|s| s['text'] =~ /moved .*to #{config['asana_beginning_milestone']}/}[0]))
             lead_times_collection.find(:end_story_id => end_story["id"]).delete_one
             lead_time = record_time(task_id, task_completed, task_deleted, start_story, config['asana_beginning_milestone'], end_story, config['asana_ending_milestone'], lead_times_collection)
-            puts "Inserted lead time: #{lead_time}"
+            puts "Inserted lead time for task: #{task["name"]}, spent #{lead_time["elapsed_days"]} days from #{config['asana_beginning_milestone']} --> #{config['asana_ending_milestone']}."
           end
         end
         puts "Finished creating milestone and lead time data."
@@ -170,10 +171,10 @@ module Asanban
       month = "#{end_timestamp.year}-#{end_timestamp.month}"
       year = end_timestamp.year.to_s
 
-      record = {"day" => day, "month" => month, "year" => year, 
+      record = {"day" => day, "month" => month, "year" => year,
         "task_id" => task_id, "date" => Time.parse(day),
         "task_completed" => task_completed, "task_deleted" => task_deleted,
-        "start_milestone" => start_milestone, "end_milestone" => end_milestone, 
+        "start_milestone" => start_milestone, "end_milestone" => end_milestone,
         "start_story_id" => start_story_id, "end_story_id" => end_story_id,
         "elapsed_days" => elapsed_days}
       collection.find(:end_story_id => end_story_id).delete_one
