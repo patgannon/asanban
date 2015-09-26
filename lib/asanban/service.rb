@@ -39,8 +39,10 @@ module Asanban
       return [400, "Cannot aggregate by #{aggregate_by}"] unless ["year", "month", "day", "start_milestone"].include? aggregate_by
       content_type :json
 
+      # Find all entries in the database with key #{aggregate_by}, and collect as value the elapsed_days and keep count
       map_function = "function() { emit(this.#{aggregate_by}, { count: 1, elapsed_days: this.elapsed_days }); };"
 
+      # Sum the values elapsed_days and count, for each item with same key/name
       reduce_function = "function (name, values){
         var n = {count : 0, elapsed_days : 0};
         for ( var i=0; i<values.length; i++ ){
@@ -50,6 +52,7 @@ module Asanban
         return n;
       };"
 
+      # Average the elapsed_days for the number of database entries
       finalize_function = "function(who, res){
         res.avg = res.elapsed_days / res.count;
         return res;
@@ -71,9 +74,12 @@ module Asanban
         end
 
         #TODO: Move this (and other M/Rs?) to bulk loader
-        map_function = "function() { emit(this.task_id, {end_milestone: this.end_milestone, end_story_id: this.end_story_id, day: this.day}); };"
+        # Find all entries in the database with key task_id, and collect as value the end_milestone, end_story_id and day
+        map_function = "function() { emit(this.task_id, {end_milestone: this.end_milestone, end_story_id: this.end_story_id, day: this.day, task_name: this.task_name}); };"
+
+        # For each task_id, find and story the last milestone entered, the last story_id and the day when entered this milestone
         reduce_function = "function (name, values){
-          var n = {end_milestone : '', end_story_id : 0};
+          var n = {end_milestone : '', end_story_id : 0, day : '', task_name : values[0].task_name};
           for ( var i=0; i<values.length; i++ ){
             if (values[i].end_story_id > n.end_story_id) {
               n.end_milestone = values[i].end_milestone;
@@ -84,26 +90,31 @@ module Asanban
           return n;
         };"
 
-        query = {"task_completed" => false, "task_deleted" => false}
+        #Find tasks that have neither been completed or deleted
+        query = {:task_completed => false, :task_deleted => false}
+        #If start_date and end_date are specified in the URL, also add date query
         if ((start_date = params[:start_date]) && (end_date = params[:end_date]))
-          query["date"] = {"$gte" => Time.parse(start_date), "$lte" => Time.parse(end_date)}
+          query[:date] = {:$gte => Time.parse(start_date), :$lte => Time.parse(end_date)}
         end
         results = mongoClient[:milestone_times].find(query).map_reduce(map_function, reduce_function, {:out => {inline: 1}})
         elapsed_days_by_phase = {}
-          task_id = result['_id']
-          end_milestone = result["value"]["end_milestone"]
-          if (end_milestone == "Dev Ready (10): Strat(5), Eng (1), Imp(3), Eme")
-            puts "task_id: #{task_id}"
-          end
-          day = result["value"]["day"]
+        puts "Tasks still in progress:"
         results.each do |result|
+          puts result[:value][:task_name]
+          task_id = result[:_id]
+          end_milestone = result[:value][:end_milestone]
+          #if (end_milestone == "Dev Ready (10): Strat(5), Eng (1), Imp(3), Eme")
+          #  puts "task_id: #{task_id}"
+          #end
+          day = result[:value][:day]
           milestone_metrics = (hash[end_milestone] ||= {})
-          milestone_metrics["current"] ||= 0
-          milestone_metrics["current"] += 1
+          milestone_metrics[:current] ||= 0
+          milestone_metrics[:current] += 1
+          #Calculate the number of seconds elapsed since arrived in this last section
           elapsed_seconds = Time.now - Time.parse(day)
           elapsed_days = ((elapsed_seconds / 60) / 60) / 24
-          milestone_metrics["current_days_total"] ||= 0
-          milestone_metrics["current_days_total"] += elapsed_days
+          milestone_metrics[:current_days_total] ||= 0
+          milestone_metrics[:current_days_total] += elapsed_days
           elapsed_days_by_phase[end_milestone] ||= []
           elapsed_days_by_phase[end_milestone].push elapsed_days
         end
@@ -120,7 +131,7 @@ module Asanban
           hash = hash.select {|phase, phase_metrics| phase_metrics["current_days_average"] }
         end
         return hash.to_json
-      end
+      end #if (aggregate_by == "start_milestone")
 
       if (milestone = params[:milestone])
         results = mongoClient[:milestone_times].find(:start_milestone => milestone).map_reduce(map_function, reduce_function, {:out => {inline: 1}})
@@ -128,6 +139,8 @@ module Asanban
         results = mongoClient[:lead_times].find().map_reduce(map_function, reduce_function, {:finalize => finalize_function, :out => {inline: 1}})
       end
       sortedresults = results.sort do |a, b|
+        # Get date (day, month, year, depending on #{aggregate_by}) and sort
+        # This way, you can find the number of items finished (by lead_time) per [day,month,year], with total elapsed days
         datestring_to_int(a[:_id]) <=> datestring_to_int(b[:_id])
       end
       sortedresults.to_json
