@@ -25,21 +25,28 @@ module Asanban
       mongodb_uri = config['mongodb_uri']
       mongodb_dbname = config['mongodb_dbname']
 
-      if (ARGV.count < 1 || ARGV.count > 2)
-        puts "Syntax is: bulkload {stage} [mode]"
+      if (ARGV.count < 1 || ARGV.count > 3)
+        puts "Syntax is: bulkload {dir} {stage} [mode]"
+        puts "{dir} points to the directory containing the configuration files"
         puts "{stage} is 'LOCAL' or 'PROD'"
         puts "[mode] can be 'tasks' (to create task data) or 'times' to create milestone and lead time data. Script will do both if not specified."
         exit(1)
       else
-        if (ARGV[0].downcase == "local")
-          mongoClient = Mongo::Client.new(['localhost:27017'], :database => mongodb_dbname)
-        elsif (ARGV[0].downcase == "prod")
-          mongoClient = Mongo::Client.new(mongodb_uri, :database => mongodb_dbname)
+        if (File.directory?(ARGV[0]))
+          Dir.chdir(ARGV[0])
         else
-          puts "Invalid stage: #{ARGV[0]}"
+          puts "Invalid directory: #{ARGV[0]}"
           exit(1)
         end
-        if (mode = ARGV[1]) && !['tasks', 'times'].include?(mode)
+        if (ARGV[1].downcase == "local")
+          mongoClient = Mongo::Client.new(['localhost:27017'], :database => mongodb_dbname)
+        elsif (ARGV[1].downcase == "prod")
+          mongoClient = Mongo::Client.new(mongodb_uri, :database => mongodb_dbname)
+        else
+          puts "Invalid stage: #{ARGV[1]}"
+          exit(1)
+        end
+        if (mode = ARGV[2]) && !['tasks', 'times'].include?(mode)
           puts "Invalid mode: #{mode}"
           exit(1)
         end
