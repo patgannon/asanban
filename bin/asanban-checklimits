@@ -1,0 +1,4 @@
+#!/usr/bin/env ruby
+require "asanban/check_limits"
+
+Asanban::CheckLimits.run()
