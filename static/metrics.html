@@ -6,9 +6,9 @@
 		<script type="text/javascript">
 		$(document).ready(function() {
 			var chart = new Charts.LineChart('leadtime_chart', { label_format: "%m/%d/%Y" });
-			$.get("/metrics?aggregate_by=month", function(metric_data) {
+			$.get("/metrics?aggregate_by=day", function(metric_data) {
 				var data = metric_data.map(function(item) {
-					return [parse(item[0]), item[1]];
+					return [parse(item["_id"]), item["value"]["avg"]];
 				});
 				chart.add_line({
 			  	data: data,
@@ -22,13 +22,13 @@
 
 			function parse(month_str) {
 				var month_parts = month_str.split("-");
-				return new Date(month_parts[0], month_parts[1] - 1, "1");
+				return new Date(month_parts[0], month_parts[1] - 1, month_parts[2]);
 			}
 		});
 		</script>
 	</head>
 	<body>
 		<h1>Lead Times</h1>
-		<div id='leadtime_chart' style='width: 600px; height: 300px;'></div>
+		<div id='leadtime_chart' style='width: 1200px; height: 600px;'></div>
 	</body>
 </html>

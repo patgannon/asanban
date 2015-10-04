@@ -1,5 +1,13 @@
+*.config
+*.creator
+*.creator.user
+*.includes
+*.files
 *.gem
 *.rbc
+*.yml
+*.log
+*.project
 .bundle
 .config
 .yardoc
